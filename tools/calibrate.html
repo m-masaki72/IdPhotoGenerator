@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Slot Calibration Tool</title>
+<style>
+  body { margin: 0; background: #222; color: #fff; font-family: monospace; display: flex; gap: 16px; padding: 16px; }
+  #canvas-wrap { position: relative; flex-shrink: 0; }
+  canvas { display: block; cursor: crosshair; }
+  #overlay { position: absolute; inset: 0; pointer-events: none; }
+  #panel { width: 340px; }
+  h2 { margin: 0 0 12px; font-size: 1rem; color: #0f0; }
+  .slot-entry { margin-bottom: 12px; padding: 8px; background: #333; border-radius: 6px; }
+  .slot-entry.active { background: #445; border: 1px solid #88f; }
+  .slot-entry.done { background: #354; border: 1px solid #4f4; }
+  .slot-title { font-size:.8rem; color: #aaa; margin-bottom:4px; }
+  .coords { font-size:.75rem; color:#ff8; }
+  #info { background:#333; padding:10px; border-radius:6px; margin-bottom:12px; font-size:.8rem; line-height:1.6; }
+  #output { background:#111; padding:10px; border-radius:6px; font-size:.7rem; white-space:pre; overflow-x:auto; margin-top:12px; }
+  #pos { font-size:.75rem; color:#aaa; margin-top:8px; }
+  button { background:#446; color:#fff; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; margin-top:8px; font-family:monospace; }
+  button:hover { background:#558; }
+</style>
+</head>
+<body>
+<div id="canvas-wrap">
+  <canvas id="c"></canvas>
+  <svg id="overlay"></svg>
+</div>
+<div id="panel">
+  <h2>Slot Calibration Tool</h2>
+  <div id="info">
+    <b>使い方：</b><br>
+    各スロットの <span style="color:#f88">左上</span> → <span style="color:#8f8">右下</span> の順にクリック<br>
+    6スロット × 2クリック = 合計12クリック
+  </div>
+  <div id="slot-list"></div>
+  <div id="pos">マウス位置: -</div>
+  <button onclick="resetAll()">リセット</button>
+  <div id="output"></div>
+</div>
+
+<script>
+const LABELS = ['✖ 近すぎる', '✖ 遠すぎる', '✖ 寝ている', '✖ おしりを向ける', '✖ 食事中', '✖ 若い時の写真'];
+const slots = Array(6).fill(null).map(() => ({ tl: null, br: null }));
+let clickState = 0; // 0..11: slot*2 + corner (0=TL,1=BR)
+let imgNW, imgNH, scale;
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const slotList = document.getElementById('slot-list');
+const posEl = document.getElementById('pos');
+const outputEl = document.getElementById('output');
+
+// Build slot UI
+LABELS.forEach((lbl, i) => {
+  const div = document.createElement('div');
+  div.className = 'slot-entry' + (i === 0 ? ' active' : '');
+  div.id = `slot-${i}`;
+  div.innerHTML = `<div class="slot-title">${i+1}. ${lbl}</div><div class="coords" id="coords-${i}">未測定</div>`;
+  slotList.appendChild(div);
+});
+
+// Load template
+const img = new Image();
+img.onload = () => {
+  imgNW = img.naturalWidth;
+  imgNH = img.naturalHeight;
+  const maxH = window.innerHeight - 32;
+  scale = Math.min(maxH / imgNH, 900 / imgNW);
+  canvas.width = Math.round(imgNW * scale);
+  canvas.height = Math.round(imgNH * scale);
+  overlay.setAttribute('width', canvas.width);
+  overlay.setAttribute('height', canvas.height);
+  overlay.style.width = canvas.width + 'px';
+  overlay.style.height = canvas.height + 'px';
+  redraw();
+};
+img.src = '../assets/template.jpg';
+
+function redraw() {
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  // Draw existing slots
+  slots.forEach((s, i) => {
+    if (!s.tl) return;
+    const x1 = s.tl.x * scale, y1 = s.tl.y * scale;
+    ctx.strokeStyle = '#0f0';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x1, y1, 5, 0, Math.PI*2);
+    ctx.stroke();
+    if (!s.br) return;
+    const x2 = s.br.x * scale, y2 = s.br.y * scale;
+    ctx.strokeStyle = '#0f0';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x1, y1, x2-x1, y2-y1);
+    ctx.fillStyle = 'rgba(0,255,0,0.08)';
+    ctx.fillRect(x1, y1, x2-x1, y2-y1);
+    // Label
+    ctx.fillStyle = '#0f0';
+    ctx.font = `bold ${Math.round(12/scale)}px monospace`;
+    ctx.fillText(`${i+1}`, x1 + 4, y1 + 16);
+  });
+  // Next click indicator
+  if (clickState < 12) {
+    const si = Math.floor(clickState / 2);
+    const corner = clickState % 2 === 0 ? '左上をクリック' : '右下をクリック';
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, canvas.width, 28);
+    ctx.fillStyle = '#ff8';
+    ctx.font = '13px monospace';
+    ctx.fillText(`スロット ${si+1}: ${corner}`, 8, 18);
+  }
+}
+
+canvas.addEventListener('mousemove', (e) => {
+  const r = canvas.getBoundingClientRect();
+  const cx = (e.clientX - r.left) / scale;
+  const cy = (e.clientY - r.top) / scale;
+  posEl.textContent = `マウス位置: x=${Math.round(cx)}, y=${Math.round(cy)}`;
+});
+
+canvas.addEventListener('click', (e) => {
+  if (clickState >= 12) return;
+  const r = canvas.getBoundingClientRect();
+  const px = Math.round((e.clientX - r.left) / scale);
+  const py = Math.round((e.clientY - r.top) / scale);
+
+  const si = Math.floor(clickState / 2);
+  const corner = clickState % 2;
+  if (corner === 0) {
+    slots[si].tl = { x: px, y: py };
+  } else {
+    slots[si].br = { x: px, y: py };
+    updateSlotUI(si);
+    updateOutput();
+  }
+  clickState++;
+
+  // Update active slot
+  document.querySelectorAll('.slot-entry').forEach((el, i) => {
+    el.className = 'slot-entry' + (i === Math.floor(clickState/2) && clickState < 12 ? ' active' : (slots[i].br ? ' done' : ''));
+  });
+
+  redraw();
+});
+
+function updateSlotUI(i) {
+  const s = slots[i];
+  if (!s.tl || !s.br) return;
+  document.getElementById(`coords-${i}`).textContent =
+    `x:${s.tl.x}, y:${s.tl.y}, w:${s.br.x - s.tl.x}, h:${s.br.y - s.tl.y}`;
+}
+
+function updateOutput() {
+  const arr = slots.map(s => {
+    if (!s.tl || !s.br) return '  null';
+    return `  {x:${s.tl.x.toString().padStart(4)}, y:${s.tl.y.toString().padStart(4)}, w:${(s.br.x-s.tl.x).toString().padStart(3)}, h:${(s.br.y-s.tl.y).toString().padStart(3)}}`;
+  });
+  outputEl.textContent = 'const TEMPLATE_SLOTS = [\n' + arr.join(',\n') + '\n];';
+}
+
+function resetAll() {
+  slots.forEach(s => { s.tl = null; s.br = null; });
+  clickState = 0;
+  document.querySelectorAll('.slot-entry').forEach((el, i) => {
+    el.className = 'slot-entry' + (i === 0 ? ' active' : '');
+    document.getElementById(`coords-${i}`).textContent = '未測定';
+  });
+  outputEl.textContent = '';
+  redraw();
+}
+</script>
+</body>
+</html>
