@@ -77,29 +77,14 @@
         <label>背景色</label>
         <input type="color" id="bg-color" value="#b8d4e3">
       </div>
-      <div class="control-group">
-        <label>レイアウト</label>
-        <select id="layout-select">
-          <option value="3x2">3×2（横3 縦2）</option>
-          <option value="2x3">2×3（横2 縦3）</option>
-        </select>
-      </div>
-      <div class="control-group">
-        <label>枠線</label>
-        <select id="border-select">
-          <option value="thin">細い白枠</option>
-          <option value="thick">太い白枠</option>
-          <option value="none">なし</option>
-        </select>
-      </div>
     </div>
 
     <div class="preview-area" id="preview-area">
-      <div class="preview-grid" id="preview-grid"></div>
+      <canvas id="preview-canvas" style="display:block;width:100%;border-radius:8px;cursor:pointer"></canvas>
     </div>
 
     <p style="font-size:.8rem;color:var(--text-sub);margin-bottom:12px">
-      💡 各画像をクリックすると位置・スケールを調整できます
+      💡 プレビューの各写真をクリックすると位置・スケールを調整できます
     </p>
 
     <div class="controls-row" style="justify-content:space-between">

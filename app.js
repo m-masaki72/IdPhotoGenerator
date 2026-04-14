@@ -1,15 +1,26 @@
+// ===== Template constants =====
+const TEMPLATE_W = 1414;
+const TEMPLATE_H = 2000;
+const TEMPLATE_SLOTS = [
+  {x: 70,  y: 895,  w: 378, h: 486},
+  {x: 518, y: 895,  w: 378, h: 486},
+  {x: 966, y: 895,  w: 378, h: 486},
+  {x: 70,  y: 1491, w: 378, h: 486},
+  {x: 518, y: 1491, w: 378, h: 486},
+  {x: 966, y: 1491, w: 378, h: 486},
+];
+const SLOT_LABELS = ['✖ 近すぎる', '✖ 遠すぎる', '✖ 寝ている', '✖ おしりを向ける', '✖ 食事中', '✖ 若い時の写真'];
+
 // ===== State =====
 const state = {
   slots: Array(6).fill(null).map(() => ({
-    original: null,   // original File/Blob
-    processed: null,  // after bg removal (or same as original)
+    original: null,
+    processed: null,
     objectUrl: null,
     transform: { scale: 100, x: 0, y: 0 },
   })),
   bgRemoveEnabled: false,
   bgColor: '#b8d4e3',
-  layout: '3x2',
-  borderStyle: 'thin',
   bgRemover: null,
   currentEditSlot: -1,
 };
@@ -26,22 +37,31 @@ const btnTwitter = $('#btn-twitter');
 const btnRestart = $('#btn-restart');
 const bgRemoveToggle = $('#bg-remove-toggle');
 const bgColorInput = $('#bg-color');
-const layoutSelect = $('#layout-select');
-const borderSelect = $('#border-select');
 const editorOverlay = $('#editor-overlay');
 const progressBar = $('#bg-progress');
 const progressFill = $('#bg-progress-fill');
 
+// ===== Template image cache =====
+let templateImg = null;
+function loadTemplateImg() {
+  if (templateImg) return Promise.resolve(templateImg);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => { templateImg = img; resolve(img); };
+    img.onerror = () => resolve(null);
+    img.src = 'assets/template.jpg';
+  });
+}
+
 // ===== Initialize upload slots =====
 function initUploadSlots() {
   uploadGrid.innerHTML = '';
-  const labels = ['😊 笑顔', '😎 キメ顔', '😤 怒り', '🥺 泣き', '😲 驚き', '😴 リラックス'];
   for (let i = 0; i < 6; i++) {
     const slot = document.createElement('div');
     slot.className = 'upload-slot';
     slot.dataset.index = i;
     slot.innerHTML = `
-      <span class="slot-label">${labels[i]}</span>
+      <span class="slot-label">${SLOT_LABELS[i]}</span>
       <div class="placeholder">
         <span class="icon">＋</span>
         <span>タップして追加</span>
@@ -216,57 +236,73 @@ bgColorInput.addEventListener('input', () => {
   state.bgColor = bgColorInput.value;
   renderPreview();
 });
-layoutSelect.addEventListener('change', () => {
-  state.layout = layoutSelect.value;
-  renderPreview();
-});
-borderSelect.addEventListener('change', () => {
-  state.borderStyle = borderSelect.value;
-  renderPreview();
-});
 
-// ===== Preview =====
-function renderPreview() {
-  const grid = $('#preview-grid');
+// ===== Preview (template-based) =====
+async function renderPreview() {
+  const canvas = $('#preview-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
   const area = $('#preview-area');
-  area.style.background = state.bgColor;
 
-  const [cols] = state.layout === '3x2' ? [3, 2] : [2, 3];
-  grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-  grid.innerHTML = '';
+  const areaW = area.clientWidth - 32; // minus padding
+  const scale = areaW / TEMPLATE_W;
+  canvas.width = areaW;
+  canvas.height = Math.round(TEMPLATE_H * scale);
+  canvas.style.width = '100%';
 
-  const gap = state.borderStyle === 'none' ? '0' : state.borderStyle === 'thick' ? '6px' : '3px';
-  grid.style.gap = gap;
-  grid.style.padding = gap;
-
-  for (let i = 0; i < 6; i++) {
-    const cell = document.createElement('div');
-    cell.className = 'preview-cell';
-    cell.style.background = state.bgColor;
-    cell.style.cursor = 'pointer';
-    cell.dataset.index = i;
-
-    const slot = state.slots[i];
-    if (slot.objectUrl) {
-      const img = document.createElement('img');
-      img.src = slot.objectUrl;
-      img.style.objectFit = 'none';
-      img.style.objectPosition = `calc(50% + ${slot.transform.x}px) calc(50% + ${slot.transform.y}px)`;
-      img.style.transform = `scale(${slot.transform.scale / 100})`;
-      cell.appendChild(img);
-    }
-
-    cell.addEventListener('click', () => openEditor(i));
-    grid.appendChild(cell);
+  // Draw template background
+  const tmpl = await loadTemplateImg();
+  if (tmpl) {
+    ctx.drawImage(tmpl, 0, 0, canvas.width, canvas.height);
+  } else {
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
+
+  // Composite each user photo into its slot
+  const imgLoads = state.slots.map((slot, i) => {
+    if (!slot.objectUrl) return Promise.resolve();
+    const s = TEMPLATE_SLOTS[i];
+    const sx = Math.round(s.x * scale);
+    const sy = Math.round(s.y * scale);
+    const sw = Math.round(s.w * scale);
+    const sh = Math.round(s.h * scale);
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(sx, sy, sw, sh);
+        ctx.clip();
+        ctx.fillStyle = state.bgColor;
+        ctx.fillRect(sx, sy, sw, sh);
+
+        const imgScale = slot.transform.scale / 100;
+        const fitScale = Math.max(sw / img.naturalWidth, sh / img.naturalHeight);
+        const drawW = img.naturalWidth * fitScale * imgScale;
+        const drawH = img.naturalHeight * fitScale * imgScale;
+        const dx = sx + (sw - drawW) / 2 + slot.transform.x * (sw / 300);
+        const dy = sy + (sh - drawH) / 2 + slot.transform.y * (sh / 400);
+        ctx.drawImage(img, dx, dy, drawW, drawH);
+        ctx.restore();
+        resolve();
+      };
+      img.onerror = resolve;
+      img.src = slot.objectUrl;
+    });
+  });
+
+  await Promise.all(imgLoads);
 }
 
 // ===== Editor =====
-const SLOT_LABELS = ['😊 笑顔', '😎 キメ顔', '😤 怒り', '🥺 泣き', '😲 驚き', '😴 リラックス'];
-
 function openEditor(index) {
   const slot = state.slots[index];
-  if (!slot.objectUrl) return;
+  if (!slot.objectUrl) {
+    showToast('まず画像をアップロードしてください');
+    return;
+  }
 
   state.currentEditSlot = index;
   $('#editor-slot-label').textContent = SLOT_LABELS[index];
@@ -274,6 +310,11 @@ function openEditor(index) {
   $('#edit-scale-val').textContent = slot.transform.scale + '%';
   $('#edit-x').value = slot.transform.x;
   $('#edit-y').value = slot.transform.y;
+
+  // Set editor wrap aspect ratio to match template slot
+  const tSlot = TEMPLATE_SLOTS[index];
+  const wrap = $('#editor-canvas-wrap');
+  wrap.style.aspectRatio = `${tSlot.w} / ${tSlot.h}`;
 
   editorOverlay.classList.add('show');
   renderEditorCanvas();
@@ -287,13 +328,13 @@ function renderEditorCanvas() {
   const canvas = $('#editor-canvas');
   const wrap = $('#editor-canvas-wrap');
   const ctx = canvas.getContext('2d');
-  wrap.style.background = state.bgColor;
 
   const w = wrap.clientWidth;
   const h = wrap.clientHeight;
-  canvas.width = w * 2;
-  canvas.height = h * 2;
-  ctx.scale(2, 2);
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  ctx.scale(dpr, dpr);
 
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = state.bgColor;
@@ -308,8 +349,65 @@ function renderEditorCanvas() {
     const dx = (w - drawW) / 2 + slot.transform.x;
     const dy = (h - drawH) / 2 + slot.transform.y;
     ctx.drawImage(img, dx, dy, drawW, drawH);
+
+    // Draw crop frame overlay
+    drawCropFrame(ctx, w, h);
   };
   img.src = slot.objectUrl;
+}
+
+function drawCropFrame(ctx, w, h) {
+  // Semi-transparent border fade
+  const edge = 4;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = edge * 2;
+  ctx.setLineDash([]);
+  ctx.strokeRect(0, 0, w, h);
+  ctx.restore();
+
+  // Dashed accent frame
+  ctx.save();
+  ctx.strokeStyle = '#e84040';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeRect(1, 1, w - 2, h - 2);
+  ctx.restore();
+
+  // Corner brackets
+  const B = Math.min(24, w * 0.12);
+  const lw = 3;
+  ctx.save();
+  ctx.strokeStyle = '#e84040';
+  ctx.lineWidth = lw;
+  ctx.setLineDash([]);
+  ctx.lineCap = 'square';
+
+  const corners = [
+    [0, 0,  B, 0,  0, B],   // TL
+    [w, 0,  w-B, 0,  w, B], // TR
+    [0, h,  B, h,  0, h-B], // BL
+    [w, h,  w-B, h,  w, h-B], // BR
+  ];
+  corners.forEach(([px, py, ax, ay, bx, by]) => {
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(px, py);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+  });
+  ctx.restore();
+
+  // Label
+  const label = '← この枠内に収まります →';
+  ctx.save();
+  ctx.font = `bold ${Math.max(10, Math.round(w * 0.04))}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(w * 0.1, h - Math.round(h * 0.085), w * 0.8, Math.round(h * 0.075));
+  ctx.fillStyle = '#fff';
+  ctx.fillText(label, w / 2, h - Math.round(h * 0.022));
+  ctx.restore();
 }
 
 $('#edit-scale').addEventListener('input', (e) => {
@@ -354,7 +452,7 @@ $('#editor-cancel').addEventListener('click', () => {
   editorOverlay.classList.remove('show');
 });
 
-// ===== Generate =====
+// ===== Generate (template composite) =====
 btnGenerate.addEventListener('click', async () => {
   btnGenerate.disabled = true;
   btnGenerate.innerHTML = '<span class="spinner"></span> 生成中...';
@@ -375,41 +473,40 @@ async function generateResult() {
   const canvas = $('#result-canvas');
   const ctx = canvas.getContext('2d');
 
-  const cellW = 400;
-  const cellH = Math.round(cellW * 4 / 3);
-  const [cols, rows] = state.layout === '3x2' ? [3, 2] : [2, 3];
-  const gap = state.borderStyle === 'none' ? 0 : state.borderStyle === 'thick' ? 12 : 4;
+  canvas.width = TEMPLATE_W;
+  canvas.height = TEMPLATE_H;
 
-  canvas.width = cols * cellW + (cols + 1) * gap;
-  canvas.height = rows * cellH + (rows + 1) * gap;
+  // Draw template
+  const tmpl = await loadTemplateImg();
+  if (tmpl) {
+    ctx.drawImage(tmpl, 0, 0, TEMPLATE_W, TEMPLATE_H);
+  } else {
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, TEMPLATE_W, TEMPLATE_H);
+  }
 
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+  // Composite each photo into template slot
   const promises = state.slots.map((slot, i) => new Promise((resolve) => {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    const cx = gap + col * (cellW + gap);
-    const cy = gap + row * (cellH + gap);
-
-    ctx.fillStyle = state.bgColor;
-    ctx.fillRect(cx, cy, cellW, cellH);
-
     if (!slot.objectUrl) { resolve(); return; }
+    const s = TEMPLATE_SLOTS[i];
 
     const img = new Image();
     img.onload = () => {
       ctx.save();
       ctx.beginPath();
-      ctx.rect(cx, cy, cellW, cellH);
+      ctx.rect(s.x, s.y, s.w, s.h);
       ctx.clip();
 
-      const scale = slot.transform.scale / 100;
-      const fitScale = Math.max(cellW / img.naturalWidth, cellH / img.naturalHeight);
-      const drawW = img.naturalWidth * fitScale * scale;
-      const drawH = img.naturalHeight * fitScale * scale;
-      const dx = cx + (cellW - drawW) / 2 + slot.transform.x * (cellW / 300);
-      const dy = cy + (cellH - drawH) / 2 + slot.transform.y * (cellH / 400);
+      // Fill background color (for transparent PNGs)
+      ctx.fillStyle = state.bgColor;
+      ctx.fillRect(s.x, s.y, s.w, s.h);
+
+      const imgScale = slot.transform.scale / 100;
+      const fitScale = Math.max(s.w / img.naturalWidth, s.h / img.naturalHeight);
+      const drawW = img.naturalWidth * fitScale * imgScale;
+      const drawH = img.naturalHeight * fitScale * imgScale;
+      const dx = s.x + (s.w - drawW) / 2 + slot.transform.x * (s.w / 300);
+      const dy = s.y + (s.h - drawH) / 2 + slot.transform.y * (s.h / 400);
 
       ctx.drawImage(img, dx, dy, drawW, drawH);
       ctx.restore();
@@ -451,5 +548,23 @@ function showToast(msg) {
   setTimeout(() => toast.classList.remove('show'), 2500);
 }
 
+// ===== Preview cell click wiring (delegated) =====
+$('#preview-canvas').addEventListener('click', (e) => {
+  // Map click position to slot
+  const canvas = e.currentTarget;
+  const rect = canvas.getBoundingClientRect();
+  const cx = (e.clientX - rect.left) / rect.width * TEMPLATE_W;
+  const cy = (e.clientY - rect.top) / rect.height * TEMPLATE_H;
+
+  for (let i = 0; i < TEMPLATE_SLOTS.length; i++) {
+    const s = TEMPLATE_SLOTS[i];
+    if (cx >= s.x && cx <= s.x + s.w && cy >= s.y && cy <= s.y + s.h) {
+      openEditor(i);
+      return;
+    }
+  }
+});
+
 // ===== Init =====
 initUploadSlots();
+loadTemplateImg(); // preload

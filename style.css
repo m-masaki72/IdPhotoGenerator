@@ -204,7 +204,7 @@ input[type="color"]{
   display:flex;align-items:center;gap:8px;
 }
 .editor-canvas-wrap{
-  width:100%;aspect-ratio:3/4;
+  width:100%;aspect-ratio:7/9;
   background:var(--photo-bg);border-radius:12px;
   position:relative;overflow:hidden;cursor:grab;
   margin-bottom:16px;border:2px solid var(--border);
@@ -262,18 +262,7 @@ input[type="color"]{
 .preview-area{
   background:var(--photo-bg);border-radius:12px;
   padding:16px;margin-bottom:16px;
-}
-.preview-grid{
-  display:grid;grid-template-columns:repeat(3,1fr);
-  gap:3px;background:#fff;padding:3px;
-  border-radius:8px;aspect-ratio:auto;
-}
-.preview-cell{
-  aspect-ratio:3/4;background:var(--photo-bg);
-  position:relative;overflow:hidden;
-}
-.preview-cell img{
-  width:100%;height:100%;object-fit:cover;
+  display:flex;align-items:center;justify-content:center;
 }
 
 /* Result */
@@ -400,7 +389,7 @@ footer a:hover{text-decoration:underline}
   .control-group select,
   .control-group input[type="color"]{font-size:.8rem;padding:6px 10px}
   .editor-panel{padding:20px 16px}
-  .editor-canvas-wrap{aspect-ratio:3/4;max-height:52vw}
+  .editor-canvas-wrap{aspect-ratio:7/9;max-height:60vw}
   .result-actions{flex-direction:column}
   .result-actions .btn{width:100%;justify-content:center}
   .tweet-card{padding:16px}
