@@ -1,0 +1,11 @@
+{
+  "name": "shomei-photo-generator",
+  "version": "1.0.0",
+  "description": "証明写真ジェネレーター - Pet & Oshi ID Photo Generator",
+  "scripts": {
+    "dev": "npx serve . -p 3000",
+    "build": "echo 'Static site - no build needed'"
+  },
+  "keywords": ["証明写真", "photo", "generator", "pet"],
+  "license": "AGPL-3.0-only"
+}

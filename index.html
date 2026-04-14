@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<!--
+  証明写真ジェネレーター (Shomei Photo Generator)
+  Copyright (C) 2024
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, version 3 of the License.
+
+  Source code: https://github.com/user/shomei-photo-generator
+
+  This project uses @imgly/background-removal (AGPL-3.0, Copyright IMG.LY GmbH)
+  https://github.com/imgly/background-removal-js
+-->
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>証明写真ジェネレーター</title>
+<meta name="description" content="ペットや推しの証明写真風画像を簡単作成！6枚の画像をアップロードして、かわいい証明写真を生成しよう。">
+<meta property="og:title" content="証明写真ジェネレーター">
+<meta property="og:description" content="ペットや推しの証明写真風画像を簡単作成！">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=M+PLUS+Rounded+1c:wght@400;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1><span>証明写真</span>ジェネレーター</h1>
+    <p class="subtitle">ペットや推しの証明写真風画像をかんたん作成 🐹</p>
+  </header>
+
+  <div class="steps">
+    <div class="step-dot active" data-step="1"></div>
+    <div class="step-dot" data-step="2"></div>
+    <div class="step-dot" data-step="3"></div>
+  </div>
+
+  <!-- Step 1: Upload -->
+  <div class="section" id="step-upload">
+    <div class="section-title"><span class="num">1</span>画像をアップロード（6枚）</div>
+
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">背景を自動で切り抜く</div>
+        <div class="toggle-hint">写真の背景をきれいに消します</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="bg-remove-toggle">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="upload-grid" id="upload-grid"></div>
+
+    <div class="progress-bar" id="bg-progress">
+      <div class="fill" id="bg-progress-fill"></div>
+    </div>
+
+    <div class="controls-row" style="margin-top:20px;justify-content:flex-end">
+      <button class="btn btn-primary" id="btn-to-edit" disabled>
+        次へ：位置を調整 →
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 2: Edit / Preview -->
+  <div class="section hidden" id="step-edit">
+    <div class="section-title"><span class="num">2</span>プレビュー＆設定</div>
+
+    <div class="controls-row" style="margin-bottom:16px">
+      <div class="control-group">
+        <label>背景色</label>
+        <input type="color" id="bg-color" value="#b8d4e3">
+      </div>
+      <div class="control-group">
+        <label>レイアウト</label>
+        <select id="layout-select">
+          <option value="3x2">3×2（横3 縦2）</option>
+          <option value="2x3">2×3（横2 縦3）</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>枠線</label>
+        <select id="border-select">
+          <option value="thin">細い白枠</option>
+          <option value="thick">太い白枠</option>
+          <option value="none">なし</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="preview-area" id="preview-area">
+      <div class="preview-grid" id="preview-grid"></div>
+    </div>
+
+    <p style="font-size:.8rem;color:var(--text-sub);margin-bottom:12px">
+      💡 各画像をクリックすると位置・スケールを調整できます
+    </p>
+
+    <div class="controls-row" style="justify-content:space-between">
+      <button class="btn btn-secondary" id="btn-back-upload">← 戻る</button>
+      <button class="btn btn-primary btn-lg" id="btn-generate">
+        🎉 証明写真を生成
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 3: Result -->
+  <div class="section hidden" id="step-result">
+    <div class="section-title"><span class="num">3</span>完成！</div>
+    <div class="result-area" id="result-area">
+      <canvas id="result-canvas"></canvas>
+    </div>
+    <div class="result-actions">
+      <button class="btn btn-primary btn-lg" id="btn-download">
+        📥 ダウンロード
+      </button>
+      <button class="btn btn-twitter btn-lg" id="btn-twitter">
+        𝕏 シェア
+      </button>
+      <button class="btn btn-secondary" id="btn-restart">
+        🔄 もう一度作る
+      </button>
+    </div>
+  </div>
+
+  <div class="inspiration">
+    <p class="inspo-label">元ネタ</p>
+    <div class="tweet-embed">
+      <blockquote class="twitter-tweet" data-lang="ja" data-dnt="true">
+        <p lang="ja" dir="ltr">最近流行りの証明写真ガイドラインと、テンプレートを作成しました🐹❤<br>ハムスターだけじゃなくて犬猫とか動物でも推しでも多分使えるので自由にどうぞ😊<a href="https://twitter.com/hashtag/%E8%A8%BC%E6%98%8E%E5%86%99%E7%9C%9F?src=hash">#証明写真</a> <a href="https://twitter.com/hashtag/%E8%A8%BC%E6%98%8E%E5%86%99%E7%9C%9F%E9%A2%A8?src=hash">#証明写真風</a></p>
+        &mdash; ちー🐹🌹 (@chiii_taso)
+        <a href="https://x.com/chiii_taso/status/1832432940330184914">September 7, 2024</a>
+      </blockquote>
+    </div>
+  </div>
+
+  <footer>
+    <p>Made with ❤️ for your adorable pets</p>
+    <div class="license-section">
+      <details>
+        <summary>ライセンス・利用許諾</summary>
+        <div class="license-detail">
+          <p>
+            このサイトはオープンソースソフトウェアを利用して作られています。
+          </p>
+          <p>
+            <strong>背景切り抜き機能</strong><br>
+            <a href="https://img.ly" target="_blank" rel="noopener">IMG.LY GmbH</a> 提供の
+            <a href="https://github.com/imgly/background-removal-js" target="_blank" rel="noopener">background-removal</a><br>
+            ライセンス:
+            <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener">AGPL-3.0</a>
+          </p>
+          <p>
+            <strong>フォント</strong><br>
+            <a href="https://fonts.google.com/specimen/Zen+Maru+Gothic" target="_blank" rel="noopener">Zen Maru Gothic</a> /
+            <a href="https://fonts.google.com/specimen/M+PLUS+Rounded+1c" target="_blank" rel="noopener">M PLUS Rounded 1c</a><br>
+            ライセンス: SIL Open Font License 1.1
+          </p>
+          <p style="margin-bottom:0">
+            このサイトのソースコードは GitHub で公開しています。<br>
+            <a href="https://github.com/user/shomei-photo-generator" target="_blank" rel="noopener">
+              https://github.com/user/shomei-photo-generator
+            </a>
+          </p>
+        </div>
+      </details>
+    </div>
+  </footer>
+</div>
+
+<!-- Editor overlay -->
+<div class="editor-overlay" id="editor-overlay">
+  <div class="editor-panel">
+    <h3>✏️ 画像を調整 <span id="editor-slot-label" style="font-size:.8rem;color:var(--text-sub)"></span></h3>
+    <div class="editor-canvas-wrap" id="editor-canvas-wrap">
+      <canvas id="editor-canvas"></canvas>
+    </div>
+    <div class="editor-controls">
+      <div class="slider-group">
+        <label>拡大率</label>
+        <input type="range" id="edit-scale" min="50" max="300" value="100" step="1">
+        <span id="edit-scale-val" style="font-size:.8rem;min-width:36px;text-align:right">100%</span>
+      </div>
+      <div class="slider-group">
+        <label>X位置</label>
+        <input type="range" id="edit-x" min="-200" max="200" value="0" step="1">
+      </div>
+      <div class="slider-group">
+        <label>Y位置</label>
+        <input type="range" id="edit-y" min="-200" max="200" value="0" step="1">
+      </div>
+      <div class="editor-btns">
+        <button class="btn btn-primary" id="editor-apply" style="flex:1">適用</button>
+        <button class="btn btn-secondary" id="editor-cancel">キャンセル</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script type="module" src="app.js"></script>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+</body>
+</html>
