@@ -2,14 +2,24 @@
 const TEMPLATE_W = 1414;
 const TEMPLATE_H = 2000;
 const TEMPLATE_SLOTS = [
-  {x: 199, y:  884, w: 278, h: 393},
-  {x: 567, y:  883, w: 280, h: 396},
-  {x: 935, y:  884, w: 283, h: 395},
-  {x: 199, y: 1417, w: 280, h: 393},
-  {x: 567, y: 1416, w: 280, h: 396},
-  {x: 935, y: 1417, w: 283, h: 393},
+  {x: 197, y:  882, w: 282, h: 397},
+  {x: 565, y:  881, w: 284, h: 400},
+  {x: 933, y:  882, w: 287, h: 399},
+  {x: 197, y: 1415, w: 284, h: 397},
+  {x: 565, y: 1414, w: 284, h: 400},
+  {x: 933, y: 1415, w: 287, h: 397},
 ];
 const SLOT_LABELS = ['✖ 近すぎる', '✖ 遠すぎる', '✖ 寝ている', '✖ おしりを向ける', '✖ 食事中', '✖ 若い時の写真'];
+
+// ===== Background presets =====
+const BG_PRESETS = [
+  { id: 'white',      label: '白',       stops: ['#ffffff', '#ffffff'] },
+  { id: 'white-sky',  label: '白→水色',  stops: ['#f0f8ff', '#a8ccdf'] },
+  { id: 'sky',        label: '水色',     stops: ['#b8d4e3', '#b8d4e3'] },
+  { id: 'sky-white',  label: '水色→白',  stops: ['#a8ccdf', '#f0f8ff'] },
+  { id: 'blue-sky',   label: '青→水色',  stops: ['#4aaee8', '#c0e0f8'] },
+  { id: 'blue',       label: '青',       stops: ['#5b9fd6', '#2e75b0'] },
+];
 // お手本スロット座標
 const SAMPLE_SLOT = {x: 772, y: 121, w: 484, h: 623};
 
@@ -23,7 +33,7 @@ const state = {
   })),
   sampleSlot: { original: null, processed: null, objectUrl: null, transform: { scale: 100, x: 0, y: 0 } },
   bgRemoveEnabled: false,
-  bgColor: '#b8d4e3',
+  bgPreset: 'blue-sky',
   bgRemover: null,
   currentEditSlot: -1, // -1 = お手本スロット, 0-5 = 通常スロット
 };
@@ -39,7 +49,7 @@ const btnDownload = $('#btn-download');
 const btnTwitter = $('#btn-twitter');
 const btnRestart = $('#btn-restart');
 const bgRemoveToggle = $('#bg-remove-toggle');
-const bgColorInput = $('#bg-color');
+const bgPresetList = $('#bg-preset-list');
 const editorOverlay = $('#editor-overlay');
 const progressBar = $('#bg-progress');
 const progressFill = $('#bg-progress-fill');
@@ -78,6 +88,16 @@ function loadSlotImg(objectUrl) {
   });
 }
 
+// ===== BG gradient helper =====
+function applyBgGradient(ctx, x, y, w, h) {
+  const preset = BG_PRESETS.find(p => p.id === state.bgPreset) || BG_PRESETS[2];
+  const grad = ctx.createLinearGradient(x, y, x, y + h);
+  grad.addColorStop(0, preset.stops[0]);
+  grad.addColorStop(1, preset.stops[1]);
+  ctx.fillStyle = grad;
+  ctx.fillRect(x, y, w, h);
+}
+
 // ===== Composite helper (shared by renderPreview & generateResult) =====
 // transform.x/y は仮想300x400座標系（スロット幅/高さを300/400とした場合のオフセット）
 function compositeSlot(ctx, slotData, s, scale) {
@@ -91,8 +111,7 @@ function compositeSlot(ctx, slotData, s, scale) {
     ctx.beginPath();
     ctx.rect(sx, sy, sw, sh);
     ctx.clip();
-    ctx.fillStyle = state.bgColor;
-    ctx.fillRect(sx, sy, sw, sh);
+    applyBgGradient(ctx, sx, sy, sw, sh);
     const imgScale = slotData.transform.scale / 100;
     const fitScale = Math.max(sw / img.naturalWidth, sh / img.naturalHeight);
     const drawW = img.naturalWidth * fitScale * imgScale;
@@ -388,10 +407,22 @@ bgRemoveToggle.addEventListener('change', async () => {
 });
 
 // ===== Settings =====
-bgColorInput.addEventListener('input', () => {
-  state.bgColor = bgColorInput.value;
-  renderPreview();
-});
+function initBgPresets() {
+  BG_PRESETS.forEach(preset => {
+    const btn = document.createElement('button');
+    btn.className = 'bg-preset-btn' + (preset.id === state.bgPreset ? ' active' : '');
+    btn.title = preset.label;
+    btn.dataset.id = preset.id;
+    btn.style.background = `linear-gradient(to bottom, ${preset.stops[0]}, ${preset.stops[1]})`;
+    btn.addEventListener('click', () => {
+      state.bgPreset = preset.id;
+      document.querySelectorAll('.bg-preset-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderPreview();
+    });
+    bgPresetList.appendChild(btn);
+  });
+}
 
 // ===== Preview (template-based) =====
 async function renderPreview() {
@@ -474,8 +505,7 @@ function renderEditorCanvas() {
     ctx.save();
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = state.bgColor;
-    ctx.fillRect(0, 0, w, h);
+    applyBgGradient(ctx, 0, 0, w, h);
 
     const scale = slot.transform.scale / 100;
     const fitScale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
@@ -706,4 +736,5 @@ window.addEventListener('resize', () => {
 // ===== Init =====
 initUploadSlots();
 initSampleSlot();
+initBgPresets();
 loadTemplateImg(); // preload
