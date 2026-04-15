@@ -56,6 +56,54 @@ function loadTemplateImg() {
   });
 }
 
+// ===== Slot image cache =====
+const _slotImgCache = new Map(); // objectUrl → HTMLImageElement
+
+// URL.revokeObjectURL の代わりにこれを使う → キャッシュも同時に削除
+function revokeSlotUrl(url) {
+  if (!url) return;
+  URL.revokeObjectURL(url);
+  _slotImgCache.delete(url);
+}
+
+function loadSlotImg(objectUrl) {
+  if (_slotImgCache.has(objectUrl)) {
+    return Promise.resolve(_slotImgCache.get(objectUrl));
+  }
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => { _slotImgCache.set(objectUrl, img); resolve(img); };
+    img.onerror = reject;
+    img.src = objectUrl;
+  });
+}
+
+// ===== Composite helper (shared by renderPreview & generateResult) =====
+// transform.x/y は仮想300x400座標系（スロット幅/高さを300/400とした場合のオフセット）
+function compositeSlot(ctx, slotData, s, scale) {
+  if (!slotData.objectUrl) return Promise.resolve();
+  const sx = Math.round(s.x * scale);
+  const sy = Math.round(s.y * scale);
+  const sw = Math.round(s.w * scale);
+  const sh = Math.round(s.h * scale);
+  return loadSlotImg(slotData.objectUrl).then((img) => {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(sx, sy, sw, sh);
+    ctx.clip();
+    ctx.fillStyle = state.bgColor;
+    ctx.fillRect(sx, sy, sw, sh);
+    const imgScale = slotData.transform.scale / 100;
+    const fitScale = Math.max(sw / img.naturalWidth, sh / img.naturalHeight);
+    const drawW = img.naturalWidth * fitScale * imgScale;
+    const drawH = img.naturalHeight * fitScale * imgScale;
+    const dx = sx + (sw - drawW) / 2 + slotData.transform.x * (sw / 300);
+    const dy = sy + (sh - drawH) / 2 + slotData.transform.y * (sh / 400);
+    ctx.drawImage(img, dx, dy, drawW, drawH);
+    ctx.restore();
+  }).catch(() => {});
+}
+
 // ===== Initialize upload slots =====
 function initUploadSlots() {
   uploadGrid.innerHTML = '';
@@ -105,7 +153,7 @@ function initSampleSlot() {
 async function handleSampleFileSelect(file) {
   if (!file) return;
   const slot = state.sampleSlot;
-  if (slot.objectUrl) URL.revokeObjectURL(slot.objectUrl);
+  revokeSlotUrl(slot.objectUrl);
   slot.original = file;
   slot.transform = { scale: 100, x: 0, y: 0 };
   if (state.bgRemoveEnabled) {
@@ -131,8 +179,8 @@ async function processSampleBgRemoval(file) {
       return;
     }
     const blob = await mod.removeBackground(file);
+    revokeSlotUrl(state.sampleSlot.objectUrl);
     state.sampleSlot.processed = blob;
-    if (state.sampleSlot.objectUrl) URL.revokeObjectURL(state.sampleSlot.objectUrl);
     state.sampleSlot.objectUrl = URL.createObjectURL(blob);
     updateSampleSlotUI();
   } catch (err) {
@@ -145,7 +193,7 @@ async function processSampleBgRemoval(file) {
 
 function removeSampleSlot() {
   const slot = state.sampleSlot;
-  if (slot.objectUrl) URL.revokeObjectURL(slot.objectUrl);
+  revokeSlotUrl(slot.objectUrl);
   slot.original = null;
   slot.processed = null;
   slot.objectUrl = null;
@@ -174,7 +222,7 @@ async function handleFileSelect(index, file) {
   if (!file) return;
   const slot = state.slots[index];
 
-  if (slot.objectUrl) URL.revokeObjectURL(slot.objectUrl);
+  revokeSlotUrl(slot.objectUrl);
 
   slot.original = file;
   slot.transform = { scale: 100, x: 0, y: 0 };
@@ -191,7 +239,7 @@ async function handleFileSelect(index, file) {
 
 function removeSlot(index) {
   const slot = state.slots[index];
-  if (slot.objectUrl) URL.revokeObjectURL(slot.objectUrl);
+  revokeSlotUrl(slot.objectUrl);
   slot.original = null;
   slot.processed = null;
   slot.objectUrl = null;
@@ -270,8 +318,8 @@ async function processBackgroundRemoval(index, file) {
         }
       }
     });
+    revokeSlotUrl(state.slots[index].objectUrl);
     state.slots[index].processed = blob;
-    if (state.slots[index].objectUrl) URL.revokeObjectURL(state.slots[index].objectUrl);
     state.slots[index].objectUrl = URL.createObjectURL(blob);
     updateSlotUI(index);
   } catch (err) {
@@ -318,6 +366,24 @@ bgRemoveToggle.addEventListener('change', async () => {
     if (state.sampleSlot.original && state.sampleSlot.processed === state.sampleSlot.original) {
       await processSampleBgRemoval(state.sampleSlot.original);
     }
+  } else {
+    // OFF: 元画像に戻す
+    for (let i = 0; i < 6; i++) {
+      const slot = state.slots[i];
+      if (slot.original && slot.processed !== slot.original) {
+        revokeSlotUrl(slot.objectUrl);
+        slot.processed = slot.original;
+        slot.objectUrl = URL.createObjectURL(slot.original);
+        updateSlotUI(i);
+      }
+    }
+    const s = state.sampleSlot;
+    if (s.original && s.processed !== s.original) {
+      revokeSlotUrl(s.objectUrl);
+      s.processed = s.original;
+      s.objectUrl = URL.createObjectURL(s.original);
+      updateSampleSlotUI();
+    }
   }
 });
 
@@ -334,13 +400,12 @@ async function renderPreview() {
   const ctx = canvas.getContext('2d');
   const area = $('#preview-area');
 
-  const areaW = area.clientWidth - 32; // minus padding
+  const areaW = area.clientWidth - 32;
   const scale = areaW / TEMPLATE_W;
   canvas.width = areaW;
   canvas.height = Math.round(TEMPLATE_H * scale);
   canvas.style.width = '100%';
 
-  // Draw template background
   const tmpl = await loadTemplateImg();
   if (tmpl) {
     ctx.drawImage(tmpl, 0, 0, canvas.width, canvas.height);
@@ -349,76 +414,16 @@ async function renderPreview() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
-  // Composite each user photo into its slot
-  const imgLoads = state.slots.map((slot, i) => {
-    if (!slot.objectUrl) return Promise.resolve();
-    const s = TEMPLATE_SLOTS[i];
-    const sx = Math.round(s.x * scale);
-    const sy = Math.round(s.y * scale);
-    const sw = Math.round(s.w * scale);
-    const sh = Math.round(s.h * scale);
-
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(sx, sy, sw, sh);
-        ctx.clip();
-        ctx.fillStyle = state.bgColor;
-        ctx.fillRect(sx, sy, sw, sh);
-
-        const imgScale = slot.transform.scale / 100;
-        const fitScale = Math.max(sw / img.naturalWidth, sh / img.naturalHeight);
-        const drawW = img.naturalWidth * fitScale * imgScale;
-        const drawH = img.naturalHeight * fitScale * imgScale;
-        const dx = sx + (sw - drawW) / 2 + slot.transform.x * (sw / 300);
-        const dy = sy + (sh - drawH) / 2 + slot.transform.y * (sh / 400);
-        ctx.drawImage(img, dx, dy, drawW, drawH);
-        ctx.restore();
-        resolve();
-      };
-      img.onerror = resolve;
-      img.src = slot.objectUrl;
-    });
-  });
-
-  await Promise.all(imgLoads);
-
-  // Composite sample slot (お手本) if uploaded and coordinates are set
-  if (state.sampleSlot.objectUrl && SAMPLE_SLOT.w > 0) {
-    await new Promise((resolve) => {
-      const s = SAMPLE_SLOT;
-      const sx = Math.round(s.x * scale);
-      const sy = Math.round(s.y * scale);
-      const sw = Math.round(s.w * scale);
-      const sh = Math.round(s.h * scale);
-      const img = new Image();
-      img.onload = () => {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(sx, sy, sw, sh);
-        ctx.clip();
-        ctx.fillStyle = state.bgColor;
-        ctx.fillRect(sx, sy, sw, sh);
-        const slot = state.sampleSlot;
-        const imgScale = slot.transform.scale / 100;
-        const fitScale = Math.max(sw / img.naturalWidth, sh / img.naturalHeight);
-        const drawW = img.naturalWidth * fitScale * imgScale;
-        const drawH = img.naturalHeight * fitScale * imgScale;
-        const dx = sx + (sw - drawW) / 2 + slot.transform.x * (sw / 300);
-        const dy = sy + (sh - drawH) / 2 + slot.transform.y * (sh / 400);
-        ctx.drawImage(img, dx, dy, drawW, drawH);
-        ctx.restore();
-        resolve();
-      };
-      img.onerror = resolve;
-      img.src = state.sampleSlot.objectUrl;
-    });
-  }
+  await Promise.all([
+    ...state.slots.map((slot, i) => compositeSlot(ctx, slot, TEMPLATE_SLOTS[i], scale)),
+    compositeSlot(ctx, state.sampleSlot, SAMPLE_SLOT, scale),
+  ]);
 }
 
 // ===== Editor =====
+// エディタ画像キャッシュ（ちらつき防止）
+let _editorImgCache = { src: null, img: null };
+
 function openEditor(index) {
   const slot = index === -1 ? state.sampleSlot : state.slots[index];
   if (!slot.objectUrl) {
@@ -433,10 +438,12 @@ function openEditor(index) {
   $('#edit-x').value = slot.transform.x;
   $('#edit-y').value = slot.transform.y;
 
-  // Set editor wrap aspect ratio to match template slot
   const tSlot = index === -1 ? SAMPLE_SLOT : TEMPLATE_SLOTS[index];
   const wrap = $('#editor-canvas-wrap');
   wrap.style.aspectRatio = `${tSlot.w} / ${tSlot.h}`;
+
+  // 新しいスロットを開いたらキャッシュをクリア
+  _editorImgCache = { src: null, img: null };
 
   editorOverlay.classList.add('show');
   renderEditorCanvas();
@@ -454,32 +461,48 @@ function renderEditorCanvas() {
   const w = wrap.clientWidth;
   const h = wrap.clientHeight;
   const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.round(w * dpr);
-  canvas.height = Math.round(h * dpr);
-  ctx.scale(dpr, dpr);
 
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = state.bgColor;
-  ctx.fillRect(0, 0, w, h);
+  // サイズが変わった時だけ canvas をリセット（これを毎回やるとちらつく）
+  const newW = Math.round(w * dpr);
+  const newH = Math.round(h * dpr);
+  if (canvas.width !== newW || canvas.height !== newH) {
+    canvas.width = newW;
+    canvas.height = newH;
+  }
 
-  const img = new Image();
-  img.onload = () => {
+  const drawFrame = (img) => {
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = state.bgColor;
+    ctx.fillRect(0, 0, w, h);
+
     const scale = slot.transform.scale / 100;
     const fitScale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
     const drawW = img.naturalWidth * fitScale * scale;
     const drawH = img.naturalHeight * fitScale * scale;
-    const dx = (w - drawW) / 2 + slot.transform.x;
-    const dy = (h - drawH) / 2 + slot.transform.y;
+    // 仮想300x400座標系で統一
+    const dx = (w - drawW) / 2 + slot.transform.x * (w / 300);
+    const dy = (h - drawH) / 2 + slot.transform.y * (h / 400);
     ctx.drawImage(img, dx, dy, drawW, drawH);
-
-    // Draw crop frame overlay
     drawCropFrame(ctx, w, h);
+    ctx.restore();
   };
-  img.src = slot.objectUrl;
+
+  if (_editorImgCache.src === slot.objectUrl && _editorImgCache.img) {
+    // キャッシュ済み → 同期描画でちらつきなし
+    drawFrame(_editorImgCache.img);
+  } else {
+    const img = new Image();
+    img.onload = () => {
+      _editorImgCache = { src: slot.objectUrl, img };
+      drawFrame(img);
+    };
+    img.src = slot.objectUrl;
+  }
 }
 
 function drawCropFrame(ctx, w, h) {
-  // Semi-transparent border fade
   const edge = 4;
   ctx.save();
   ctx.strokeStyle = 'rgba(255,255,255,0.9)';
@@ -488,7 +511,6 @@ function drawCropFrame(ctx, w, h) {
   ctx.strokeRect(0, 0, w, h);
   ctx.restore();
 
-  // Dashed accent frame
   ctx.save();
   ctx.strokeStyle = '#e84040';
   ctx.lineWidth = 2;
@@ -496,7 +518,6 @@ function drawCropFrame(ctx, w, h) {
   ctx.strokeRect(1, 1, w - 2, h - 2);
   ctx.restore();
 
-  // Corner brackets
   const B = Math.min(24, w * 0.12);
   const lw = 3;
   ctx.save();
@@ -506,10 +527,10 @@ function drawCropFrame(ctx, w, h) {
   ctx.lineCap = 'square';
 
   const corners = [
-    [0, 0,  B, 0,  0, B],   // TL
-    [w, 0,  w-B, 0,  w, B], // TR
-    [0, h,  B, h,  0, h-B], // BL
-    [w, h,  w-B, h,  w, h-B], // BR
+    [0, 0,  B, 0,  0, B],
+    [w, 0,  w-B, 0,  w, B],
+    [0, h,  B, h,  0, h-B],
+    [w, h,  w-B, h,  w, h-B],
   ];
   corners.forEach(([px, py, ax, ay, bx, by]) => {
     ctx.beginPath();
@@ -520,7 +541,6 @@ function drawCropFrame(ctx, w, h) {
   });
   ctx.restore();
 
-  // Label
   const label = '← この枠内に収まります →';
   ctx.save();
   ctx.font = `bold ${Math.max(10, Math.round(w * 0.04))}px sans-serif`;
@@ -552,18 +572,24 @@ $('#edit-y').addEventListener('input', (e) => {
 });
 
 // Drag support on editor canvas
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 let dragStart = null;
 const editorWrap = $('#editor-canvas-wrap');
 editorWrap.addEventListener('pointerdown', (e) => {
   const t = currentEditSlotData().transform;
-  dragStart = { x: e.clientX, y: e.clientY, origX: t.x, origY: t.y };
+  dragStart = {
+    x: e.clientX, y: e.clientY,
+    origX: t.x, origY: t.y,
+    w: editorWrap.clientWidth, h: editorWrap.clientHeight,
+  };
   editorWrap.setPointerCapture(e.pointerId);
 });
 editorWrap.addEventListener('pointermove', (e) => {
   if (!dragStart) return;
   const t = currentEditSlotData().transform;
-  t.x = dragStart.origX + (e.clientX - dragStart.x);
-  t.y = dragStart.origY + (e.clientY - dragStart.y);
+  // スクリーンピクセル → 仮想300x400座標系に変換してクランプ
+  t.x = clamp(dragStart.origX + (e.clientX - dragStart.x) * (300 / dragStart.w), -300, 300);
+  t.y = clamp(dragStart.origY + (e.clientY - dragStart.y) * (400 / dragStart.h), -300, 300);
   $('#edit-x').value = t.x;
   $('#edit-y').value = t.y;
   renderEditorCanvas();
@@ -602,7 +628,6 @@ async function generateResult() {
   canvas.width = TEMPLATE_W;
   canvas.height = TEMPLATE_H;
 
-  // Draw template
   const tmpl = await loadTemplateImg();
   if (tmpl) {
     ctx.drawImage(tmpl, 0, 0, TEMPLATE_W, TEMPLATE_H);
@@ -611,66 +636,10 @@ async function generateResult() {
     ctx.fillRect(0, 0, TEMPLATE_W, TEMPLATE_H);
   }
 
-  // Composite each photo into template slot
-  const promises = state.slots.map((slot, i) => new Promise((resolve) => {
-    if (!slot.objectUrl) { resolve(); return; }
-    const s = TEMPLATE_SLOTS[i];
-
-    const img = new Image();
-    img.onload = () => {
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(s.x, s.y, s.w, s.h);
-      ctx.clip();
-
-      // Fill background color (for transparent PNGs)
-      ctx.fillStyle = state.bgColor;
-      ctx.fillRect(s.x, s.y, s.w, s.h);
-
-      const imgScale = slot.transform.scale / 100;
-      const fitScale = Math.max(s.w / img.naturalWidth, s.h / img.naturalHeight);
-      const drawW = img.naturalWidth * fitScale * imgScale;
-      const drawH = img.naturalHeight * fitScale * imgScale;
-      const dx = s.x + (s.w - drawW) / 2 + slot.transform.x * (s.w / 300);
-      const dy = s.y + (s.h - drawH) / 2 + slot.transform.y * (s.h / 400);
-
-      ctx.drawImage(img, dx, dy, drawW, drawH);
-      ctx.restore();
-      resolve();
-    };
-    img.onerror = resolve;
-    img.src = slot.objectUrl;
-  }));
-
-  await Promise.all(promises);
-
-  // Composite sample slot (お手本) at full resolution
-  if (state.sampleSlot.objectUrl && SAMPLE_SLOT.w > 0) {
-    await new Promise((resolve) => {
-      const s = SAMPLE_SLOT;
-      const img = new Image();
-      img.onload = () => {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(s.x, s.y, s.w, s.h);
-        ctx.clip();
-        ctx.fillStyle = state.bgColor;
-        ctx.fillRect(s.x, s.y, s.w, s.h);
-        const slot = state.sampleSlot;
-        const imgScale = slot.transform.scale / 100;
-        const fitScale = Math.max(s.w / img.naturalWidth, s.h / img.naturalHeight);
-        const drawW = img.naturalWidth * fitScale * imgScale;
-        const drawH = img.naturalHeight * fitScale * imgScale;
-        const dx = s.x + (s.w - drawW) / 2 + slot.transform.x * (s.w / 300);
-        const dy = s.y + (s.h - drawH) / 2 + slot.transform.y * (s.h / 400);
-        ctx.drawImage(img, dx, dy, drawW, drawH);
-        ctx.restore();
-        resolve();
-      };
-      img.onerror = resolve;
-      img.src = state.sampleSlot.objectUrl;
-    });
-  }
+  await Promise.all([
+    ...state.slots.map((slot, i) => compositeSlot(ctx, slot, TEMPLATE_SLOTS[i], 1)),
+    compositeSlot(ctx, state.sampleSlot, SAMPLE_SLOT, 1),
+  ]);
 }
 
 // ===== Download =====
@@ -704,13 +673,11 @@ function showToast(msg) {
 
 // ===== Preview cell click wiring (delegated) =====
 $('#preview-canvas').addEventListener('click', (e) => {
-  // Map click position to slot
   const canvas = e.currentTarget;
   const rect = canvas.getBoundingClientRect();
   const cx = (e.clientX - rect.left) / rect.width * TEMPLATE_W;
   const cy = (e.clientY - rect.top) / rect.height * TEMPLATE_H;
 
-  // Check sample slot
   if (SAMPLE_SLOT.w > 0 && state.sampleSlot.objectUrl) {
     const s = SAMPLE_SLOT;
     if (cx >= s.x && cx <= s.x + s.w && cy >= s.y && cy <= s.y + s.h) {
@@ -725,6 +692,15 @@ $('#preview-canvas').addEventListener('click', (e) => {
       return;
     }
   }
+});
+
+// ===== Resize: プレビューを再描画 =====
+let _resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(() => {
+    if (!$('#step-edit').classList.contains('hidden')) renderPreview();
+  }, 200);
 });
 
 // ===== Init =====
