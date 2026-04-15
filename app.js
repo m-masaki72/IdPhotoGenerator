@@ -2,14 +2,16 @@
 const TEMPLATE_W = 1414;
 const TEMPLATE_H = 2000;
 const TEMPLATE_SLOTS = [
-  {x: 198, y:  884, w: 280, h: 396},
-  {x: 567, y:  884, w: 279, h: 395},
-  {x: 934, y:  883, w: 285, h: 396},
-  {x: 198, y: 1416, w: 280, h: 394},
-  {x: 565, y: 1415, w: 283, h: 395},
-  {x: 936, y: 1417, w: 281, h: 395},
+  {x: 199, y:  884, w: 278, h: 393},
+  {x: 567, y:  883, w: 280, h: 396},
+  {x: 935, y:  884, w: 283, h: 395},
+  {x: 199, y: 1417, w: 280, h: 393},
+  {x: 567, y: 1416, w: 280, h: 396},
+  {x: 935, y: 1417, w: 283, h: 393},
 ];
 const SLOT_LABELS = ['✖ 近すぎる', '✖ 遠すぎる', '✖ 寝ている', '✖ おしりを向ける', '✖ 食事中', '✖ 若い時の写真'];
+// お手本スロット座標
+const SAMPLE_SLOT = {x: 772, y: 121, w: 484, h: 623};
 
 // ===== State =====
 const state = {
@@ -19,10 +21,11 @@ const state = {
     objectUrl: null,
     transform: { scale: 100, x: 0, y: 0 },
   })),
+  sampleSlot: { original: null, processed: null, objectUrl: null, transform: { scale: 100, x: 0, y: 0 } },
   bgRemoveEnabled: false,
   bgColor: '#b8d4e3',
   bgRemover: null,
-  currentEditSlot: -1,
+  currentEditSlot: -1, // -1 = お手本スロット, 0-5 = 通常スロット
 };
 
 // ===== DOM refs =====
@@ -81,6 +84,89 @@ function initUploadSlots() {
       e.stopPropagation();
       removeSlot(i);
     });
+  }
+}
+
+// ===== Sample slot (お手本) =====
+function initSampleSlot() {
+  const slotEl = $('#sample-slot');
+  const input = $('#sample-slot-input');
+  slotEl.addEventListener('click', (e) => {
+    if (e.target.closest('.remove-btn')) return;
+    input.click();
+  });
+  input.addEventListener('change', (e) => handleSampleFileSelect(e.target.files[0]));
+  slotEl.querySelector('.remove-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    removeSampleSlot();
+  });
+}
+
+async function handleSampleFileSelect(file) {
+  if (!file) return;
+  const slot = state.sampleSlot;
+  if (slot.objectUrl) URL.revokeObjectURL(slot.objectUrl);
+  slot.original = file;
+  slot.transform = { scale: 100, x: 0, y: 0 };
+  if (state.bgRemoveEnabled) {
+    await processSampleBgRemoval(file);
+  } else {
+    slot.processed = file;
+    slot.objectUrl = URL.createObjectURL(file);
+    updateSampleSlotUI();
+  }
+}
+
+async function processSampleBgRemoval(file) {
+  const slotEl = $('#sample-slot');
+  slotEl.classList.add('has-image');
+  slotEl.querySelector('.placeholder').innerHTML = '<span class="spinner"></span><br><span style="font-size:.75rem">切り抜き中...</span>';
+  slotEl.querySelector('.placeholder').style.display = '';
+  try {
+    const mod = await loadBgRemover();
+    if (!mod) {
+      state.sampleSlot.processed = file;
+      state.sampleSlot.objectUrl = URL.createObjectURL(file);
+      updateSampleSlotUI();
+      return;
+    }
+    const blob = await mod.removeBackground(file);
+    state.sampleSlot.processed = blob;
+    if (state.sampleSlot.objectUrl) URL.revokeObjectURL(state.sampleSlot.objectUrl);
+    state.sampleSlot.objectUrl = URL.createObjectURL(blob);
+    updateSampleSlotUI();
+  } catch (err) {
+    state.sampleSlot.processed = file;
+    state.sampleSlot.objectUrl = URL.createObjectURL(file);
+    updateSampleSlotUI();
+    showToast('⚠️ 切り抜きできなかったので元の画像を使います');
+  }
+}
+
+function removeSampleSlot() {
+  const slot = state.sampleSlot;
+  if (slot.objectUrl) URL.revokeObjectURL(slot.objectUrl);
+  slot.original = null;
+  slot.processed = null;
+  slot.objectUrl = null;
+  slot.transform = { scale: 100, x: 0, y: 0 };
+  updateSampleSlotUI();
+}
+
+function updateSampleSlotUI() {
+  const el = $('#sample-slot');
+  const slot = state.sampleSlot;
+  const existing = el.querySelector('img');
+  if (existing) existing.remove();
+  if (slot.objectUrl) {
+    el.classList.add('has-image');
+    el.querySelector('.placeholder').style.display = 'none';
+    const img = document.createElement('img');
+    img.src = slot.objectUrl;
+    el.appendChild(img);
+  } else {
+    el.classList.remove('has-image');
+    el.querySelector('.placeholder').style.display = '';
   }
 }
 
@@ -216,6 +302,7 @@ btnToEdit.addEventListener('click', () => {
 btnBackUpload.addEventListener('click', () => showStep(1));
 btnRestart.addEventListener('click', () => {
   state.slots.forEach((_, i) => removeSlot(i));
+  removeSampleSlot();
   showStep(1);
 });
 
@@ -227,6 +314,9 @@ bgRemoveToggle.addEventListener('change', async () => {
       if (state.slots[i].original && state.slots[i].processed === state.slots[i].original) {
         await processBackgroundRemoval(i, state.slots[i].original);
       }
+    }
+    if (state.sampleSlot.original && state.sampleSlot.processed === state.sampleSlot.original) {
+      await processSampleBgRemoval(state.sampleSlot.original);
     }
   }
 });
@@ -294,25 +384,57 @@ async function renderPreview() {
   });
 
   await Promise.all(imgLoads);
+
+  // Composite sample slot (お手本) if uploaded and coordinates are set
+  if (state.sampleSlot.objectUrl && SAMPLE_SLOT.w > 0) {
+    await new Promise((resolve) => {
+      const s = SAMPLE_SLOT;
+      const sx = Math.round(s.x * scale);
+      const sy = Math.round(s.y * scale);
+      const sw = Math.round(s.w * scale);
+      const sh = Math.round(s.h * scale);
+      const img = new Image();
+      img.onload = () => {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(sx, sy, sw, sh);
+        ctx.clip();
+        ctx.fillStyle = state.bgColor;
+        ctx.fillRect(sx, sy, sw, sh);
+        const slot = state.sampleSlot;
+        const imgScale = slot.transform.scale / 100;
+        const fitScale = Math.max(sw / img.naturalWidth, sh / img.naturalHeight);
+        const drawW = img.naturalWidth * fitScale * imgScale;
+        const drawH = img.naturalHeight * fitScale * imgScale;
+        const dx = sx + (sw - drawW) / 2 + slot.transform.x * (sw / 300);
+        const dy = sy + (sh - drawH) / 2 + slot.transform.y * (sh / 400);
+        ctx.drawImage(img, dx, dy, drawW, drawH);
+        ctx.restore();
+        resolve();
+      };
+      img.onerror = resolve;
+      img.src = state.sampleSlot.objectUrl;
+    });
+  }
 }
 
 // ===== Editor =====
 function openEditor(index) {
-  const slot = state.slots[index];
+  const slot = index === -1 ? state.sampleSlot : state.slots[index];
   if (!slot.objectUrl) {
     showToast('まず画像をアップロードしてください');
     return;
   }
 
   state.currentEditSlot = index;
-  $('#editor-slot-label').textContent = SLOT_LABELS[index];
+  $('#editor-slot-label').textContent = index === -1 ? '★ お手本' : SLOT_LABELS[index];
   $('#edit-scale').value = slot.transform.scale;
   $('#edit-scale-val').textContent = slot.transform.scale + '%';
   $('#edit-x').value = slot.transform.x;
   $('#edit-y').value = slot.transform.y;
 
   // Set editor wrap aspect ratio to match template slot
-  const tSlot = TEMPLATE_SLOTS[index];
+  const tSlot = index === -1 ? SAMPLE_SLOT : TEMPLATE_SLOTS[index];
   const wrap = $('#editor-canvas-wrap');
   wrap.style.aspectRatio = `${tSlot.w} / ${tSlot.h}`;
 
@@ -322,7 +444,7 @@ function openEditor(index) {
 
 function renderEditorCanvas() {
   const index = state.currentEditSlot;
-  const slot = state.slots[index];
+  const slot = index === -1 ? state.sampleSlot : state.slots[index];
   if (!slot.objectUrl) return;
 
   const canvas = $('#editor-canvas');
@@ -410,18 +532,22 @@ function drawCropFrame(ctx, w, h) {
   ctx.restore();
 }
 
+function currentEditSlotData() {
+  return state.currentEditSlot === -1 ? state.sampleSlot : state.slots[state.currentEditSlot];
+}
+
 $('#edit-scale').addEventListener('input', (e) => {
   const val = parseInt(e.target.value);
-  state.slots[state.currentEditSlot].transform.scale = val;
+  currentEditSlotData().transform.scale = val;
   $('#edit-scale-val').textContent = val + '%';
   renderEditorCanvas();
 });
 $('#edit-x').addEventListener('input', (e) => {
-  state.slots[state.currentEditSlot].transform.x = parseInt(e.target.value);
+  currentEditSlotData().transform.x = parseInt(e.target.value);
   renderEditorCanvas();
 });
 $('#edit-y').addEventListener('input', (e) => {
-  state.slots[state.currentEditSlot].transform.y = parseInt(e.target.value);
+  currentEditSlotData().transform.y = parseInt(e.target.value);
   renderEditorCanvas();
 });
 
@@ -429,13 +555,13 @@ $('#edit-y').addEventListener('input', (e) => {
 let dragStart = null;
 const editorWrap = $('#editor-canvas-wrap');
 editorWrap.addEventListener('pointerdown', (e) => {
-  const t = state.slots[state.currentEditSlot].transform;
+  const t = currentEditSlotData().transform;
   dragStart = { x: e.clientX, y: e.clientY, origX: t.x, origY: t.y };
   editorWrap.setPointerCapture(e.pointerId);
 });
 editorWrap.addEventListener('pointermove', (e) => {
   if (!dragStart) return;
-  const t = state.slots[state.currentEditSlot].transform;
+  const t = currentEditSlotData().transform;
   t.x = dragStart.origX + (e.clientX - dragStart.x);
   t.y = dragStart.origY + (e.clientY - dragStart.y);
   $('#edit-x').value = t.x;
@@ -517,6 +643,34 @@ async function generateResult() {
   }));
 
   await Promise.all(promises);
+
+  // Composite sample slot (お手本) at full resolution
+  if (state.sampleSlot.objectUrl && SAMPLE_SLOT.w > 0) {
+    await new Promise((resolve) => {
+      const s = SAMPLE_SLOT;
+      const img = new Image();
+      img.onload = () => {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(s.x, s.y, s.w, s.h);
+        ctx.clip();
+        ctx.fillStyle = state.bgColor;
+        ctx.fillRect(s.x, s.y, s.w, s.h);
+        const slot = state.sampleSlot;
+        const imgScale = slot.transform.scale / 100;
+        const fitScale = Math.max(s.w / img.naturalWidth, s.h / img.naturalHeight);
+        const drawW = img.naturalWidth * fitScale * imgScale;
+        const drawH = img.naturalHeight * fitScale * imgScale;
+        const dx = s.x + (s.w - drawW) / 2 + slot.transform.x * (s.w / 300);
+        const dy = s.y + (s.h - drawH) / 2 + slot.transform.y * (s.h / 400);
+        ctx.drawImage(img, dx, dy, drawW, drawH);
+        ctx.restore();
+        resolve();
+      };
+      img.onerror = resolve;
+      img.src = state.sampleSlot.objectUrl;
+    });
+  }
 }
 
 // ===== Download =====
@@ -556,6 +710,14 @@ $('#preview-canvas').addEventListener('click', (e) => {
   const cx = (e.clientX - rect.left) / rect.width * TEMPLATE_W;
   const cy = (e.clientY - rect.top) / rect.height * TEMPLATE_H;
 
+  // Check sample slot
+  if (SAMPLE_SLOT.w > 0 && state.sampleSlot.objectUrl) {
+    const s = SAMPLE_SLOT;
+    if (cx >= s.x && cx <= s.x + s.w && cy >= s.y && cy <= s.y + s.h) {
+      openEditor(-1);
+      return;
+    }
+  }
   for (let i = 0; i < TEMPLATE_SLOTS.length; i++) {
     const s = TEMPLATE_SLOTS[i];
     if (cx >= s.x && cx <= s.x + s.w && cy >= s.y && cy <= s.y + s.h) {
@@ -567,4 +729,5 @@ $('#preview-canvas').addEventListener('click', (e) => {
 
 // ===== Init =====
 initUploadSlots();
+initSampleSlot();
 loadTemplateImg(); // preload

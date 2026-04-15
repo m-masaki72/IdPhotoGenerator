@@ -137,6 +137,12 @@ h1 span{
 .upload-slot.has-image .remove-btn{display:flex}
 .upload-slot input{display:none}
 
+/* Sample slot */
+.sample-slot-section{margin-bottom:16px}
+.section-sublabel{font-size:.8rem;font-weight:700;color:var(--accent);margin-bottom:8px;letter-spacing:.04em}
+.upload-slot.sample-slot{aspect-ratio:3/4;max-width:120px}
+.upload-slot.sample-slot .slot-label{background:rgba(255,200,50,.9);color:#333}
+
 /* Controls */
 .controls-row{
   display:flex;gap:12px;flex-wrap:wrap;align-items:center;

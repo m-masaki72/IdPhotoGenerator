@@ -41,9 +41,9 @@
 </div>
 
 <script>
-const LABELS = ['✖ 近すぎる', '✖ 遠すぎる', '✖ 寝ている', '✖ おしりを向ける', '✖ 食事中', '✖ 若い時の写真'];
-const slots = Array(6).fill(null).map(() => ({ tl: null, br: null }));
-let clickState = 0; // 0..11: slot*2 + corner (0=TL,1=BR)
+const LABELS = ['✖ 近すぎる', '✖ 遠すぎる', '✖ 寝ている', '✖ おしりを向ける', '✖ 食事中', '✖ 若い時の写真', '★ お手本'];
+const slots = Array(7).fill(null).map(() => ({ tl: null, br: null }));
+let clickState = 0; // 0..13: slot*2 + corner (0=TL,1=BR)
 let imgNW, imgNH, scale;
 
 const canvas = document.getElementById('c');
@@ -103,14 +103,15 @@ function redraw() {
     ctx.fillText(`${i+1}`, x1 + 4, y1 + 16);
   });
   // Next click indicator
-  if (clickState < 12) {
+  if (clickState < 14) {
     const si = Math.floor(clickState / 2);
     const corner = clickState % 2 === 0 ? '左上をクリック' : '右下をクリック';
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    const label = si === 6 ? `お手本: ${corner}` : `スロット ${si+1}: ${corner}`;
+    ctx.fillStyle = si === 6 ? 'rgba(80,60,0,0.85)' : 'rgba(0,0,0,0.6)';
     ctx.fillRect(0, 0, canvas.width, 28);
-    ctx.fillStyle = '#ff8';
+    ctx.fillStyle = si === 6 ? '#ffd700' : '#ff8';
     ctx.font = '13px monospace';
-    ctx.fillText(`スロット ${si+1}: ${corner}`, 8, 18);
+    ctx.fillText(label, 8, 18);
   }
 }
 
@@ -122,7 +123,7 @@ canvas.addEventListener('mousemove', (e) => {
 });
 
 canvas.addEventListener('click', (e) => {
-  if (clickState >= 12) return;
+  if (clickState >= 14) return;
   const r = canvas.getBoundingClientRect();
   const px = Math.round((e.clientX - r.left) / scale);
   const py = Math.round((e.clientY - r.top) / scale);
@@ -140,7 +141,7 @@ canvas.addEventListener('click', (e) => {
 
   // Update active slot
   document.querySelectorAll('.slot-entry').forEach((el, i) => {
-    el.className = 'slot-entry' + (i === Math.floor(clickState/2) && clickState < 12 ? ' active' : (slots[i].br ? ' done' : ''));
+    el.className = 'slot-entry' + (i === Math.floor(clickState/2) && clickState < 14 ? ' active' : (slots[i].br ? ' done' : ''));
   });
 
   redraw();
@@ -154,11 +155,18 @@ function updateSlotUI(i) {
 }
 
 function updateOutput() {
-  const arr = slots.map(s => {
+  const mainSlots = slots.slice(0, 6);
+  const sampleSlot = slots[6];
+  const arr = mainSlots.map(s => {
     if (!s.tl || !s.br) return '  null';
     return `  {x:${s.tl.x.toString().padStart(4)}, y:${s.tl.y.toString().padStart(4)}, w:${(s.br.x-s.tl.x).toString().padStart(3)}, h:${(s.br.y-s.tl.y).toString().padStart(3)}}`;
   });
-  outputEl.textContent = 'const TEMPLATE_SLOTS = [\n' + arr.join(',\n') + '\n];';
+  let out = 'const TEMPLATE_SLOTS = [\n' + arr.join(',\n') + '\n];';
+  if (sampleSlot && sampleSlot.tl && sampleSlot.br) {
+    const s = sampleSlot;
+    out += `\nconst SAMPLE_SLOT = {x:${s.tl.x}, y:${s.tl.y}, w:${s.br.x - s.tl.x}, h:${s.br.y - s.tl.y}};`;
+  }
+  outputEl.textContent = out;
 }
 
 function resetAll() {
@@ -171,6 +179,13 @@ function resetAll() {
   outputEl.textContent = '';
   redraw();
 }
+
+// ===== お手本スロットのビジュアル強調 =====
+// お手本は7番目 (index 6) なので entry に金色スタイルを適用
+(function highlightSampleEntry() {
+  const el = document.getElementById('slot-6');
+  if (el) el.style.borderTop = '2px solid #ffd700';
+})();
 </script>
 </body>
 </html>
