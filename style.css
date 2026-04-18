@@ -150,7 +150,7 @@ h1 span{
 }
 .bg-preset-list{display:flex;gap:8px;flex-wrap:wrap}
 .bg-preset-btn{
-  width:32px;height:44px;border-radius:6px;
+  width:48px;height:64px;border-radius:8px;
   border:2px solid #b0b8c4;cursor:pointer;
   transition:border-color .15s,transform .15s,box-shadow .15s;
   padding:0;
