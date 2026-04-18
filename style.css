@@ -148,9 +148,9 @@ h1 span{
   font-size:13px;font-weight:700;color:var(--accent);
   margin-bottom:8px;letter-spacing:.02em;
 }
-.bg-preset-list{display:flex;gap:8px;flex-wrap:wrap}
+.bg-preset-list{display:flex;gap:6px}
 .bg-preset-btn{
-  width:48px;height:64px;border-radius:8px;
+  flex:1;height:60px;border-radius:8px;
   border:2px solid #b0b8c4;cursor:pointer;
   transition:border-color .15s,transform .15s,box-shadow .15s;
   padding:0;
