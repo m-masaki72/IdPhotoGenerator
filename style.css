@@ -144,15 +144,20 @@ h1 span{
 .upload-slot.sample-slot .slot-label{background:rgba(255,200,50,.9);color:#333}
 
 /* BG presets */
-.bg-preset-list{display:flex;gap:8px}
+.bg-select-heading{
+  font-size:13px;font-weight:700;color:var(--accent);
+  margin-bottom:8px;letter-spacing:.02em;
+}
+.bg-preset-list{display:flex;gap:8px;flex-wrap:wrap}
 .bg-preset-btn{
   width:32px;height:44px;border-radius:6px;
-  border:2px solid transparent;cursor:pointer;
-  transition:border-color .15s,transform .15s;
+  border:2px solid #b0b8c4;cursor:pointer;
+  transition:border-color .15s,transform .15s,box-shadow .15s;
   padding:0;
+  box-shadow:0 1px 3px rgba(0,0,0,.15);
 }
-.bg-preset-btn:hover{transform:translateY(-2px)}
-.bg-preset-btn.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.bg-preset-btn:hover{transform:translateY(-2px);box-shadow:0 3px 6px rgba(0,0,0,.18)}
+.bg-preset-btn.active{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
 
 /* Controls */
 .controls-row{
