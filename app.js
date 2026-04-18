@@ -197,7 +197,7 @@ async function processSampleBgRemoval(file) {
       updateSampleSlotUI();
       return;
     }
-    const blob = await mod.removeBackground(file, { model: 'isnet_fp16', device: 'gpu' });
+    const blob = await mod.removeBackground(file, { model: 'isnet_fp16' });
     revokeSlotUrl(state.sampleSlot.objectUrl);
     state.sampleSlot.processed = blob;
     state.sampleSlot.objectUrl = URL.createObjectURL(blob);
@@ -332,7 +332,6 @@ async function processBackgroundRemoval(index, file) {
 
     const blob = await mod.removeBackground(file, {
       model: 'isnet_fp16',
-      device: 'gpu',
       progress: (key, current, total) => {
         if (total > 0) {
           progressFill.style.width = Math.round((current / total) * 100) + '%';
