@@ -192,23 +192,33 @@ async function processSampleBgRemoval(file) {
   slotEl.classList.add('has-image');
   slotEl.querySelector('.placeholder').innerHTML = '<span class="spinner"></span><br><span style="font-size:.75rem">切り抜き中...</span>';
   slotEl.querySelector('.placeholder').style.display = '';
+  progressBar.classList.add('active');
+  progressFill.style.width = '0%';
   try {
     const mod = await loadBgRemover();
     if (!mod) {
       state.sampleSlot.processed = file;
       state.sampleSlot.objectUrl = URL.createObjectURL(file);
       updateSampleSlotUI();
+      progressBar.classList.remove('active');
       return;
     }
-    const blob = await mod.removeBackground(file, { model: 'isnet_fp16' });
+    const blob = await mod.removeBackground(file, {
+      model: 'isnet_fp16',
+      progress: (key, current, total) => {
+        if (total > 0) progressFill.style.width = Math.round((current / total) * 100) + '%';
+      }
+    });
     revokeSlotUrl(state.sampleSlot.objectUrl);
     state.sampleSlot.processed = blob;
     state.sampleSlot.objectUrl = URL.createObjectURL(blob);
     updateSampleSlotUI();
+    progressBar.classList.remove('active');
   } catch (err) {
     state.sampleSlot.processed = file;
     state.sampleSlot.objectUrl = URL.createObjectURL(file);
     updateSampleSlotUI();
+    progressBar.classList.remove('active');
     showToast('⚠️ 切り抜きできなかったので元の画像を使います');
   }
 }
@@ -297,25 +307,19 @@ function updateNav() {
   btnToEdit.disabled = filled < 1;
   btnToEdit.textContent = filled < 7
     ? `次へ（${filled}/7 枚）→`
-    : '次へ：位置を調整 →';
+    : '次へ：プレビューへ →';
 }
 
 // ===== Background Removal =====
 async function loadBgRemover() {
   if (state.bgRemover) return state.bgRemover;
   showToast('準備しています…少々お待ちください');
-  progressBar.classList.add('active');
-  progressFill.style.width = '10%';
-
   try {
     const mod = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm');
     state.bgRemover = mod;
-    progressFill.style.width = '100%';
-    setTimeout(() => progressBar.classList.remove('active'), 600);
     return mod;
   } catch (err) {
     console.error('BG removal load failed:', err);
-    progressBar.classList.remove('active');
     showToast('⚠️ 背景の切り抜きを準備できませんでした');
     return null;
   }
@@ -326,6 +330,8 @@ async function processBackgroundRemoval(index, file) {
   slotEl.classList.add('has-image');
   slotEl.querySelector('.placeholder').innerHTML = '<span class="spinner"></span><br><span style="font-size:.75rem">切り抜き中...</span>';
   slotEl.querySelector('.placeholder').style.display = '';
+  progressBar.classList.add('active');
+  progressFill.style.width = '0%';
 
   try {
     const mod = await loadBgRemover();
@@ -333,26 +339,27 @@ async function processBackgroundRemoval(index, file) {
       state.slots[index].processed = file;
       state.slots[index].objectUrl = URL.createObjectURL(file);
       updateSlotUI(index);
+      progressBar.classList.remove('active');
       return;
     }
 
     const blob = await mod.removeBackground(file, {
       model: 'isnet_fp16',
       progress: (key, current, total) => {
-        if (total > 0) {
-          progressFill.style.width = Math.round((current / total) * 100) + '%';
-        }
+        if (total > 0) progressFill.style.width = Math.round((current / total) * 100) + '%';
       }
     });
     revokeSlotUrl(state.slots[index].objectUrl);
     state.slots[index].processed = blob;
     state.slots[index].objectUrl = URL.createObjectURL(blob);
     updateSlotUI(index);
+    progressBar.classList.remove('active');
   } catch (err) {
     console.error('BG removal error for slot', index, err);
     state.slots[index].processed = file;
     state.slots[index].objectUrl = URL.createObjectURL(file);
     updateSlotUI(index);
+    progressBar.classList.remove('active');
     showToast('⚠️ 切り抜きできなかったので元の画像を使います');
   }
 }
@@ -377,6 +384,8 @@ btnBackUpload.addEventListener('click', () => showStep(1));
 btnRestart.addEventListener('click', () => {
   state.slots.forEach((_, i) => removeSlot(i));
   removeSampleSlot();
+  bgRemoveToggle.checked = false;
+  state.bgRemoveEnabled = false;
   showStep(1);
 });
 
