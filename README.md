@@ -4,6 +4,10 @@
 
 **🌐 公開URL: https://uchinoko-id.morilab-garage.com/**
 
+![header](header.png)
+
+![screenshot](screenshot.png)
+
 ## 機能
 
 - 7枚の画像をアップロード（お手本1枚＋証明写真6枚）
