@@ -101,7 +101,23 @@ function applyBgGradient(ctx, x, y, w, h) {
 // ===== Composite helper (shared by renderPreview & generateResult) =====
 // transform.x/y は仮想300x400座標系（スロット幅/高さを300/400とした場合のオフセット）
 function compositeSlot(ctx, slotData, s, scale) {
-  if (!slotData.objectUrl) return Promise.resolve();
+  if (!slotData.objectUrl) {
+    const sx = Math.round(s.x * scale);
+    const sy = Math.round(s.y * scale);
+    const sw = Math.round(s.w * scale);
+    const sh = Math.round(s.h * scale);
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(sx, sy, sw, sh);
+    ctx.fillStyle = '#aaaaaa';
+    const fontSize = Math.round(Math.min(sw, sh) * 0.12);
+    ctx.font = `${fontSize}px 'M PLUS Rounded 1c', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('（準備中）', sx + sw / 2, sy + sh / 2);
+    ctx.restore();
+    return Promise.resolve();
+  }
   const sx = Math.round(s.x * scale);
   const sy = Math.round(s.y * scale);
   const sw = Math.round(s.w * scale);
