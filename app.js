@@ -177,11 +177,14 @@ async function handleSampleFileSelect(file) {
   slot.transform = { scale: 100, x: 0, y: 0 };
   if (state.bgRemoveEnabled) {
     await processSampleBgRemoval(file);
+    showToast('切り抜き完了！');
   } else {
     slot.processed = file;
     slot.objectUrl = URL.createObjectURL(file);
     updateSampleSlotUI();
+    showToast('画像を追加しました！');
   }
+  updateNav();
 }
 
 async function processSampleBgRemoval(file) {
@@ -218,6 +221,7 @@ function removeSampleSlot() {
   slot.objectUrl = null;
   slot.transform = { scale: 100, x: 0, y: 0 };
   updateSampleSlotUI();
+  updateNav();
 }
 
 function updateSampleSlotUI() {
@@ -248,10 +252,12 @@ async function handleFileSelect(index, file) {
 
   if (state.bgRemoveEnabled) {
     await processBackgroundRemoval(index, file);
+    showToast('切り抜き完了！');
   } else {
     slot.processed = file;
     slot.objectUrl = URL.createObjectURL(file);
     updateSlotUI(index);
+    showToast('画像を追加しました！');
   }
   updateNav();
 }
@@ -286,10 +292,11 @@ function updateSlotUI(index) {
 }
 
 function updateNav() {
-  const filled = state.slots.filter(s => s.processed).length;
+  const filled = state.slots.filter(s => s.processed).length
+    + (state.sampleSlot.processed ? 1 : 0);
   btnToEdit.disabled = filled < 1;
-  btnToEdit.textContent = filled < 6
-    ? `次へ（${filled}/6 枚）→`
+  btnToEdit.textContent = filled < 7
+    ? `次へ（${filled}/7 枚）→`
     : '次へ：位置を調整 →';
 }
 
@@ -305,7 +312,6 @@ async function loadBgRemover() {
     state.bgRemover = mod;
     progressFill.style.width = '100%';
     setTimeout(() => progressBar.classList.remove('active'), 600);
-    showToast('準備できました！');
     return mod;
   } catch (err) {
     console.error('BG removal load failed:', err);
