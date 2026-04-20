@@ -96,7 +96,10 @@ h1 span{
   display:grid;grid-template-columns:repeat(3,1fr);
   gap:12px;
 }
-@media(max-width:500px){.upload-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:500px){
+  .upload-grid{grid-template-columns:repeat(2,1fr)}
+  .upload-slot.sample-slot{width:calc(50% - 6px)}
+}
 
 .upload-slot{
   aspect-ratio:3/4;border-radius:12px;
