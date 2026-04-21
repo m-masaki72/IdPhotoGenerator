@@ -38,6 +38,8 @@ const state = {
   currentEditSlot: -1, // -1 = お手本スロット, 0-5 = 通常スロット
 };
 
+let _bgRemovalInFlight = 0;
+
 // ===== DOM refs =====
 const $ = (sel) => document.querySelector(sel);
 
@@ -162,7 +164,7 @@ function initUploadSlots() {
       if (e.target.closest('.remove-btn')) return;
       input.click();
     });
-    input.addEventListener('change', (e) => handleFileSelect(i, e.target.files[0]));
+    input.addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; handleFileSelect(i, f); });
     slot.querySelector('.remove-btn').addEventListener('click', (e) => {
       e.stopPropagation();
       removeSlot(i);
@@ -178,7 +180,7 @@ function initSampleSlot() {
     if (e.target.closest('.remove-btn')) return;
     input.click();
   });
-  input.addEventListener('change', (e) => handleSampleFileSelect(e.target.files[0]));
+  input.addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; handleSampleFileSelect(f); });
   slotEl.querySelector('.remove-btn').addEventListener('click', (e) => {
     e.stopPropagation();
     removeSampleSlot();
@@ -210,13 +212,15 @@ async function processSampleBgRemoval(file) {
   slotEl.querySelector('.placeholder').style.display = '';
   progressBar.classList.add('active');
   progressFill.style.width = '0%';
+  _bgRemovalInFlight++;
   try {
     const mod = await loadBgRemover();
     if (!mod) {
-      state.sampleSlot.processed = file;
-      state.sampleSlot.objectUrl = URL.createObjectURL(file);
-      updateSampleSlotUI();
-      progressBar.classList.remove('active');
+      if (state.sampleSlot.original === file) {
+        state.sampleSlot.processed = file;
+        state.sampleSlot.objectUrl = URL.createObjectURL(file);
+        updateSampleSlotUI();
+      }
       return;
     }
     const blob = await mod.removeBackground(file, {
@@ -225,17 +229,22 @@ async function processSampleBgRemoval(file) {
         if (total > 0) progressFill.style.width = Math.round((current / total) * 100) + '%';
       }
     });
-    revokeSlotUrl(state.sampleSlot.objectUrl);
-    state.sampleSlot.processed = blob;
-    state.sampleSlot.objectUrl = URL.createObjectURL(blob);
-    updateSampleSlotUI();
-    progressBar.classList.remove('active');
+    if (state.sampleSlot.original === file) {
+      revokeSlotUrl(state.sampleSlot.objectUrl);
+      state.sampleSlot.processed = blob;
+      state.sampleSlot.objectUrl = URL.createObjectURL(blob);
+      updateSampleSlotUI();
+    }
   } catch (err) {
-    state.sampleSlot.processed = file;
-    state.sampleSlot.objectUrl = URL.createObjectURL(file);
-    updateSampleSlotUI();
-    progressBar.classList.remove('active');
-    showToast('⚠️ 切り抜きできなかったので元の画像を使います');
+    if (state.sampleSlot.original === file) {
+      state.sampleSlot.processed = file;
+      state.sampleSlot.objectUrl = URL.createObjectURL(file);
+      updateSampleSlotUI();
+      showToast('⚠️ 切り抜きできなかったので元の画像を使います');
+    }
+  } finally {
+    _bgRemovalInFlight--;
+    if (_bgRemovalInFlight === 0) progressBar.classList.remove('active');
   }
 }
 
@@ -348,14 +357,16 @@ async function processBackgroundRemoval(index, file) {
   slotEl.querySelector('.placeholder').style.display = '';
   progressBar.classList.add('active');
   progressFill.style.width = '0%';
+  _bgRemovalInFlight++;
 
   try {
     const mod = await loadBgRemover();
     if (!mod) {
-      state.slots[index].processed = file;
-      state.slots[index].objectUrl = URL.createObjectURL(file);
-      updateSlotUI(index);
-      progressBar.classList.remove('active');
+      if (state.slots[index].original === file) {
+        state.slots[index].processed = file;
+        state.slots[index].objectUrl = URL.createObjectURL(file);
+        updateSlotUI(index);
+      }
       return;
     }
 
@@ -365,18 +376,23 @@ async function processBackgroundRemoval(index, file) {
         if (total > 0) progressFill.style.width = Math.round((current / total) * 100) + '%';
       }
     });
-    revokeSlotUrl(state.slots[index].objectUrl);
-    state.slots[index].processed = blob;
-    state.slots[index].objectUrl = URL.createObjectURL(blob);
-    updateSlotUI(index);
-    progressBar.classList.remove('active');
+    if (state.slots[index].original === file) {
+      revokeSlotUrl(state.slots[index].objectUrl);
+      state.slots[index].processed = blob;
+      state.slots[index].objectUrl = URL.createObjectURL(blob);
+      updateSlotUI(index);
+    }
   } catch (err) {
     console.error('BG removal error for slot', index, err);
-    state.slots[index].processed = file;
-    state.slots[index].objectUrl = URL.createObjectURL(file);
-    updateSlotUI(index);
-    progressBar.classList.remove('active');
-    showToast('⚠️ 切り抜きできなかったので元の画像を使います');
+    if (state.slots[index].original === file) {
+      state.slots[index].processed = file;
+      state.slots[index].objectUrl = URL.createObjectURL(file);
+      updateSlotUI(index);
+      showToast('⚠️ 切り抜きできなかったので元の画像を使います');
+    }
+  } finally {
+    _bgRemovalInFlight--;
+    if (_bgRemovalInFlight === 0) progressBar.classList.remove('active');
   }
 }
 
