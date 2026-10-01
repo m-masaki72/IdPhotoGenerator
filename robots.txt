@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://uchinoko-id.morilab-garage.com/sitemap.xml
