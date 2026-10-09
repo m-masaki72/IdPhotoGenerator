@@ -88,3 +88,8 @@ AGPL-3.0では、このソフトウェアをネットワーク越しに提供す
 - 別ライセンスでの利用: IMG.LY社に直接お問い合わせください（support@img.ly）
 
 ライセンス全文: https://www.gnu.org/licenses/agpl-3.0.html
+
+## 紹介ページ
+
+- [制作物ページ（Mori Lab）](https://morilab-garage.com/projects/uchinoko-id/)
+- [開発ブログ記事（はてなブログ）](https://mementomori7272.hatenablog.com/entry/2026/04/21/012718)
