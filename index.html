@@ -179,7 +179,38 @@
     </a>
   </div>
 
-  <footer>
+  <style>
+.mlg-about{box-sizing:border-box;max-width:720px;margin:0 auto;padding:2.5rem 1.25rem 2rem;font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:15px;line-height:1.85;color:inherit;text-align:left}
+.mlg-about *{box-sizing:border-box}
+.mlg-about h2{font-size:1.35rem;line-height:1.4;margin:0 0 .75rem;font-weight:700}
+.mlg-about h3{font-size:1.05rem;margin:1.75rem 0 .5rem;font-weight:700}
+.mlg-about p{margin:.5rem 0}
+.mlg-about ul,.mlg-about ol{margin:.5rem 0;padding-left:1.4em}
+.mlg-about ul{list-style:disc}
+.mlg-about ol{list-style:decimal}
+.mlg-about li{margin:.2rem 0}
+.mlg-about dt{font-weight:700;margin-top:.75rem}
+.mlg-about dd{margin:.2rem 0 0}
+.mlg-about a{color:inherit;text-decoration:underline;text-underline-offset:3px}
+.mlg-credit{margin-top:2rem;padding-top:1rem;border-top:1px solid currentColor;border-top-color:color-mix(in srgb,currentColor 25%,transparent);font-size:13px;opacity:.85;display:flex;flex-wrap:wrap;gap:.25rem 1rem}
+#mlg-about-dialog{width:min(92vw,720px);max-height:85dvh;padding:0;border:0;border-radius:16px;background:#fff;color:#1a1a1a;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+#mlg-about-dialog::backdrop{background:rgba(0,0,0,.55)}
+#mlg-about-dialog .mlg-about{padding-top:1.5rem}
+.mlg-close{position:sticky;top:0;float:right;margin:.5rem .5rem 0 0;width:44px;height:44px;border:0;border-radius:50%;background:#eee;color:#1a1a1a;font-size:22px;cursor:pointer}
+.mlg-open{position:fixed;z-index:2147483000;width:44px;height:44px;padding:0;border:0;border-radius:50%;font-size:20px !important;background:rgba(0,0,0,.6);color:#fff;font:600 13px/1 system-ui,sans-serif;cursor:pointer;backdrop-filter:blur(4px)}
+.mlg-open:focus-visible,.mlg-close:focus-visible{outline:3px solid #27ff0b;outline-offset:2px}
+</style>
+<section class="mlg-about" aria-labelledby="mlg-about-title">
+<h2 id="mlg-about-title">うちの子ID写真メーカーとは</h2>
+<p>ペットや推しキャラクター、ぬいぐるみなど「うちの子」の証明写真風画像を作れる Web アプリです。写真をアップロードすると背景を自動で取り除き、証明写真らしい無地の背景と枠に並べます。</p><p>背景除去も画像の合成も、すべてブラウザの中で処理します。写真がサーバーにアップロードされることはありません。</p>
+<h3>使い方</h3>
+<ol><li>お手本の画像と、証明写真として並べる画像をアップロードします。</li><li>背景除去が終わったら、各写真の位置と大きさを調整します。</li><li>背景色やレイアウトを選び、プレビューで仕上がりを確認します。</li><li>PNG としてダウンロードするか、X でシェアします。</li></ol>
+<h3>主な機能・特徴</h3>
+<ul><li>お手本 1 枚＋証明写真 6 枚の、最大 7 枚に対応</li><li>ブラウザ内の AI で写真の背景を自動除去</li><li>ドラッグで位置、スライダーで拡大率を調整</li><li>証明写真らしい背景色とレイアウトを選択</li><li>高解像度 PNG で保存、X でシェア</li></ul>
+<h3>よくある質問</h3>
+<dl><dt>無料で使えますか？</dt><dd>はい。無料で、会員登録やアプリのインストールも不要です。ブラウザでこのページを開くだけで使えます。</dd><dt>写真はサーバーにアップロードされますか？</dt><dd>いいえ。背景除去も画像の合成も、すべてブラウザの中で処理しています。</dd><dt>どんな写真だときれいに仕上がりますか？</dt><dd>背景と被写体の色がはっきり分かれていて、顔が正面を向いている写真ほどきれいに切り抜けて、証明写真らしく仕上がります。</dd><dt>背景除去に時間がかかるのはなぜ？</dt><dd>初めて使うときに、背景除去用の AI モデルをブラウザにダウンロードするためです。さらに最大 7 枚分を端末の中で処理するので、端末の性能によっても時間が変わります。</dd><dt>顔の位置をそろえるには？</dt><dd>写真ごとにドラッグで位置を、スライダーで拡大率を調整できます。お手本の写真に合わせて調整すると、並べたときにそろって見えます。</dd></dl>
+</section>
+<footer>
     <p>Made with ❤️ for your adorable pets</p>
     <p class="mlg-credit-links">制作: <a href="https://morilab-garage.com/">MasakiMori（Mori Lab）</a> ・ <a href="https://morilab-garage.com/projects/uchinoko-id/">制作の背景・技術構成</a> ・ <a href="https://morilab-garage.com/projects/">ほかの制作物</a> ・ <a href="https://morilab-garage.com/privacy/">プライバシーポリシー</a></p>
     <div class="license-section">
